@@ -7583,3 +7583,25 @@ Four approaches were weighed before choosing. A mechanical "you ended with a pro
 **What this does not do.** It does not make a weak model persistent by prompt — that part is training, and the prompt reaches perhaps two thirds of the way. It does not feed hook output to the user's timeline: the model narrates what the hook said, which is the same channel every other tool verdict already takes.
 
 ---
+
+## 223. Decision — Compaction Is Decided by the Provider's Token Count, and the Meter Reads the Same Number (2026-09-05)
+
+**The char budget was a guess standing in for a measurement the provider had been handing us on every reply.**
+
+The budget is chars at a flat four per token, and the note on `compactNow` already recorded what that flat rate is worth — 3.45 to 5.46 across three real sessions, by how much of the turn was Thai prose and how much English tool output. Measured again today on a restored coding session: the chars said 4,982 tokens, the provider counted 10,457 for the same history — off by 2.1×, because the tool block is not in the chars at all and Thai runs well under four chars a token. A history the chars call 30% full is past 60%, so the sweep and the summary both come late, and the meter in the top bar had been telling the user the same wrong number.
+
+**What decides now.** `Agent.needsCompaction` asks `WindowFill` first: the provider's last `prompt_tokens` for a *conversation* request, carried forward to the history's current size by the chars that moved since, at the ratio that same measurement implies (its chars over its tokens, clamped 1..6). The ratio errs high on purpose — the measured count includes the tool block and the chars do not — so a char is charged as slightly more than a token's worth, which is the safe side. The delta may be negative: a sweep or a summary took chars away and the fill falls with them until the next reply measures again, which is what keeps a summary from being followed by another summary on stale numbers. Until a provider has counted, the char rule stands exactly as before, so every existing test and every provider that reports no usage behaves as it did.
+
+**Three things it does not do.**
+
+- It does not read `lastUsage`. That field is per call by design — reset at every turn's start so `LastUsage` answers "what did this call cost" — and the compaction check runs *before* the first request of a turn, which is precisely when that field is empty. A separate `fill` survives across turns and is emptied only when the history is replaced wholesale (`ClearContext`, `RestoreHistory`).
+- It does not take a summary's or an ephemeral prompt's usage as a measurement. The summarizer is sent the old messages, which is nearly the whole history; its count would report the conversation as full right after it was emptied. Only the four paths that send the conversation itself call `measureFill`. Pinned by `TestEphemeralRequestsDoNotMeasureTheWindow`.
+- It does not look the window up again. `WindowFill` reads it back from the char budget at a quarter — the inverse of `model.HistoryChars` — so a user's `ModelContextTokens` override is honoured here the same as there.
+
+**The meter.** `GetModelInfo` used to divide chars by four for the top-bar percentage while the compaction decision divided the same chars by the same four; now both read `WindowFill`, so the number the user watches is the number the sweep fires on. Checked live: the meter read 4,982 from chars before the reply and 10,668 after it, against the provider's 10,457 plus the reply that arrived since.
+
+**What this does not fix, named so it is not mistaken for fixed.** Two days of the desktop's own `token_usage` table (725 requests, 3 to 5 ก.ย.) show a median request of 39k prompt tokens, p90 107k, p99 161k, and 81 requests over 100k. None of those were late compactions: the model in use (glm-5.3-flash, per the models.dev catalog) has a 1M window, so 60% of it is 600k tokens and neither rule, chars or tokens, was ever going to fire. Those requests are big because nothing asks a long session to be smaller than the window allows. Whether it should — a cost cap, summarizing at some size regardless of what the window would tolerate — is a policy question, not an accounting one, and it is left open here; 89 to 95% of those tokens came from the provider's cache, which is the number to weigh it against.
+
+**Verified:** four new tests in `internal/cognitive/window_fill_test.go` — the provider's 85k of a 100k window summarizes where the chars said there was room; the provider's 120 of 1,250 does not summarize where the chars said there was not; the fill follows chars in both directions and forgets on clear; an ephemeral request leaves it unmeasured. `go test ./internal/cognitive ./internal/memory ./internal/turn ./desktop` green.
+
+---
