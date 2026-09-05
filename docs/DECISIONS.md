@@ -7605,3 +7605,17 @@ The budget is chars at a flat four per token, and the note on `compactNow` alrea
 **Verified:** four new tests in `internal/cognitive/window_fill_test.go` — the provider's 85k of a 100k window summarizes where the chars said there was room; the provider's 120 of 1,250 does not summarize where the chars said there was not; the fill follows chars in both directions and forgets on clear; an ephemeral request leaves it unmeasured. `go test ./internal/cognitive ./internal/memory ./internal/turn ./desktop` green.
 
 ---
+
+## 224. Decision — The Output Ceiling Is the Catalog's Figure, Not a Per-Provider Guess (2026-09-05)
+
+**Trigger:** the owner, with a screenshot of the assistant desk: *"คุณไปทำอะไรให้มันพังหรือเปล่า มันค้างไปเลย"*. A landing page asked for at 13:50; a style question answered in 17 seconds; then a reply that opened with "ได้เลยครับ … ตั้งชื่อแอปชั่วคราวว่า Finto" and nothing after it, four minutes later.
+
+**It was not hung, and it was not §222 or §223.** The log: the model answered the style question by writing the whole page as chat text — no `write` call, so no hook ran; assistant desk, so the coding paragraph was not in the prompt; 1% of the window, so compaction never looked. It streamed for two minutes into `max_tokens` 8,192, finished `length`, was asked for the rest (§ continuation, 1 of 3), started over from the first sentence, and was cut again at 8,192 after two more minutes. 16,384 output tokens, 266 seconds, no file, and a screen showing the two opening lines.
+
+**8,192 was the `default` branch.** `providerOutputCeiling` had a table — DeepSeek V4 65,536, OpenAI 16,384, Anthropic/Gemini/z.ai 32,000, and 8,192 for any provider it had no opinion about, with opencode-go among them. The catalog installed beside the database has had a `maxOutput` column since models.dev was adopted, and its row for `opencode-go/glm-5.3-flash` says 131,072. The table was what each API was once seen to accept; the catalog is what the provider itself publishes. `model.MaxOutputTokens` now reads the row, `providerOutputCeiling` asks it first, and the table stays as the floor for a model the catalog has no row for — so nothing changes for a provider that never had a row, which is exactly the set the 8,192 was written for. `clampToWindow` still has the last word: a ceiling is asked for, not reserved, and the room the window actually has still cuts it down.
+
+**Why this is the right one of the two fixes on the table.** The other is teaching the continuation to notice a reply that restarts instead of continuing and stop asking — worth doing, and it would have saved the second two minutes, but it would still have delivered no page. This one lets the reply finish. Neither makes the model reach for `write` instead of narrating a file into the chat; that is the model's habit and §221's territory (the templates skill it never opens), and it is not settled here.
+
+**Verified:** `TestOutputCeilingComesFromTheCatalogWhenItHasARow` (131,072 over 8,192, intact inside a 1M window) and `TestOutputCeilingKeepsTheFloorWithoutACatalogRow` in `internal/cognitive`; the fixture in `main_test.go` gains the real `opencode-go/glm-5.3-flash` row (captured from the local catalog, 2026-09-05). `go test ./internal/model ./internal/cognitive ./desktop` green.
+
+---
