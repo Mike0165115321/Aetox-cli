@@ -3279,6 +3279,18 @@ So the streamed answer is now **morphed**: the new markup is reconciled against 
 
 **It is not a general renderer.** Two nodes that swap places are replaced rather than moved, which is correct output and lost identity. Markdown re-parsing does not reorder blocks as text is appended to the end, so the case is theoretical until something makes it real.
 
+### 112.4 Amendment, 2026-09-07 — the beam comes out of the reply column, and §112.1 is withdrawn
+
+Owner, over a screenshot of the delegation card a month earlier: *"ตรงซับเอเจน เอาแสงวิบวับออกด้วย"*; and then, on 7 ก.ย., the same call one step out — the light goes from the transcript entirely.
+
+§112.1's **observation** stands and is not being taken back: a plan, a drawing and a long fence do read as finished from their first frame, and a user who copies then gets a third of one. What is withdrawn is the answer. The beam was borrowed from a card in a sidebar-shaped list (§110.2) and applied to the one column in the app that is **prose**. There it is not competing with chrome, it is competing with the sentence being read — and with three code blocks and a plan in one long answer, the reply column was doing the thing four simultaneous delegations had already been judged for: a light show with the content behind it.
+
+What says "not all of it yet" now is the **waiting phrase** under the message (`.typing-status`), which is on screen for exactly as long as anything is still arriving, says it in words, and sits below the reading rather than around it. One signal, in the margin, for a fact that was being stated twice.
+
+Gone: `markLive` in [markdown.ts](../desktop/frontend/src/lib/markdown.ts) and the `.live` rings, clock and reduced-motion entries for `.plan-card` / `.codeblock` / `.drawing-box` in [style.css](../desktop/frontend/src/style.css). Kept: **§112.2 in full**, and §112.3 entirely — the morph was never about the beam, and the phase-on-the-carrier rule still holds for the carriers that remain (a working session row, the workbench edge, both outside the transcript, neither with another way to say it). `@property --beam-phase` and the `beam-phase` keyframes are unchanged.
+
+**Verified:** `beam.test.ts` now pins the absence as well as the structure (no `.markdown-body:has(.live)` carrier, no `.live` ring selectors), `drawing.test.ts`'s marking tests inverted to the same, 1305-test frontend suite green.
+
 ---
 
 ## 113. Decision — A Window Is Named by the Length It States, Not by the Slot It Arrived In (2026-08-16)
@@ -6877,6 +6889,10 @@ Two behaviours, split by who is watching:
 
 The gate keys on `conv.id`, which is empty until the first turn names the session — so the very first turn of a fresh chat is unguarded, exactly as it is for `SetStance` and `turnRunningIn` today. Pre-existing, narrow, and recorded rather than silently inherited.
 
+### 185.3 Amended by §232 (2026-09-07)
+
+The four dials no longer refuse; they park in the same `pendingCfg` slot as every other door, and the window draws what is waiting. Everything this decision measured about a mid-turn `applyConfig` is unchanged and is precisely why the parked switch lands at the turn boundary instead of when it is asked for.
+
 ## 186. Decision — A File No Session Can Reach Must Say So Where the User Looks (2026-08-25)
 
 Owner, on §184's per-project memory files: *"ผมกลัวไฟล์มันจะกระจัดกระจายและมันจะเกิดหนี้ทางเทคนิค"*. Most of the fear was already fenced — a file exists only after an approved line, 8KB ceiling per file, every non-empty scope on the settings page, plain markdown throughout — but one real debt was live: `config.ProjectKey` is the folder's path, so a project moved or renamed is a new key, and the old memory file sits correct-looking forever, read by nothing, with nothing anywhere saying so. The machine already held the evidence: sessions filed under `aetox-d3a6a5aa`, a key the projects table no longer knows.
@@ -7841,5 +7857,92 @@ And `closeTab` logs, with the reason: every open logged itself and no close did,
 **What this does not settle.** Who closed `web-agent-1` at 21:07:05 — the log could not say, which is why it now can. And the desktop still re-bootstraps its engine on every session switch and registers every MCP server each time; the backoff makes that cheap when a server is down, not free when it is up.
 
 **Verified:** `internal/mcp/client_reconnect_test.go` (a rotated header reaches the next request with no reconnect; a 401 drops the session to idle with the cause in `Err()`, a call inside the backoff spends nothing, and the next call after it reconnects with `Err()` clear; a call on a session closed underneath it is served over a new one; a local server that is killed is respawned under a new pid), `desktop/browser_session_switch_test.go` (a batch and a single call on a page the user closed are told so; the two hidden-view refusals say different things; `waitShown` returns on show and on time; minting skips open ids), `desktop/frontend/src/test/deskCrossSession.test.ts` (an agent chip whose window the rack has lost comes back under its own id, `mine`, on its session).
+
+---
+
+## 231. Decision — A Batch Stops When the Page Moves Under It, and the Batch Is Taught by the Actions That Lead Into It (2026-09-07)
+
+**Trigger:** the owner, the morning after §228 landed: *"ระบบควบคุมเบาเซอร์ตอนนี้ทำงานได้ดีมาก แต่ มันทำงานแบบ 1call ต่อ 1 แอ็คชั่น มันมีวิธีที่ดีกว่านี้ไหมครับ ลองไปดู ระบบที่ควบคุมเบาเซอรืเก่งๆหน่อย"* — asked about a batch that had shipped the night before. That is the finding, not a misremembering: `steps` existed, was in the block as one line of signature, and the paragraph that says *when* to reach for it was keyed to `steps` itself. Guidance keyed to an action arrives on the first use of that action, so advice about batching reached only a model that already batched. §226 diagnosed exactly this trap for `wait` and hung its trigger on `read`; `steps` shipped without one.
+
+**What the good ones do, checked.** Playwright MCP: accessibility snapshot with refs, a fresh snapshot back from every action, actionability waits before acting, and `browser_fill_form` filling many fields per call. browser-use: `max_actions_per_step` (default 4) and the rule that matters — *"we execute the actions until the page changes"*. Aetox had the snapshot, the refs, the change note and the batch. It did not have the stop.
+
+**Decision, two parts.**
+
+- **The batch stops when the page moves out from under a step that cannot see that it moved.** A stale aim does not fail, which is what makes it worse than a failure: ref 3 on the page that arrived is a real element and an x,y off the old capture is a real place on the screen, so the click lands, reports success, and the batch carries on doing something nobody asked for. After each step the batch asks whether the page moved — `open` and `tabs select` are navigations by definition and are known without asking, everything else is caught by comparing the URL the settle already fetched — and if the next step aims by ref or by point, it and everything after it are reported as not run, with the reason and the new page's refs. `find` is the exception and goes on, because it resolves against the page it lands on and refuses rather than guess. A step with two aims counts as blind if either end is: a drag from `find` to toX,toY is half written for a page that may be gone, and half is enough to sweep the wrong thing.
+- **The batch is taught by `open` and by `click`.** One sentence each, where every browser session already passes, saying that the moves you can already name travel with this call. The `steps` paragraph stays for the model that got there anyway, and now also carries the stop rule.
+
+**What this does not do.** It does not detect a page that changed without changing its URL — a modal, a re-render, an infinite feed. The signal used is the one the change note already pays for; a DOM-mutation counter is the next rung and nobody has needed it yet. And it does not give the batch a way to spend a ref from a `read` inside the same call, which stays what `find` is for.
+
+**Verified:** `desktop/browser_steps_test.go` (a `tabs select` then a `click ref` stops before the click and names the rest, and stopping is a report rather than a failure; a step that aims at no page runs on after the same move; `stepAimsBlind` over refs, quoted refs, points, a drag's far end, text, text alongside a dead ref, and no aim at all; the guidance for `open` and `click` both name the batch). `go test ./desktop` green.
+
+---
+
+## 232. Decision — A Dial Moved Mid-Turn Is a Decision, Not a Mistake (2026-09-07)
+
+**Trigger:** the owner, holding §185's refusal in his own window — *"ผมอยากให้มันสวิชโมเดลได้มันจะยุ่งยากไหมอ่ะ แบบ ตอนกดเลี่ยนโมเดลให้โมเดลต่อไปมา เตรียมรอเลย แต่โมเดลก่อนหน้าก็ทำงานไป ทำได้ไหมแบบนี้ และเราแม่งดันรับหลายโพไวเดอรืด้วยอีก"*. What he describes — the next model waiting while the current one finishes — is the turn boundary, which is exactly where §185 proved a switch is safe. The refusal was not protecting that boundary. It was protecting nothing, and charging a decision for it.
+
+**What §185 got right, and the one thing it got wrong.** Right, and untouched: a mid-turn `applyConfig` kills the running turn's delegates, snapshots a half-written context (a hard 400 on the next Anthropic-format request), orphans queued interjections, and writes `conv.*` under a goroutine still reading it. Wrong: the remedy. §185.1 gave the four model-menu dials a loud refusal on the reasoning that *"a person is looking at these; a refusal they can read beats a deferral they cannot see"* — and then never built the thing that would let them see it. The waiting room already existed in the same decision: `conv.pendingCfg`, where every other door has parked ever since.
+
+**Decision.** `SwitchModel`, `SwitchProvider`, `SwitchThinkLevel` and `SetProviderWireFormat` stop refusing and park like everything else. `errTurnBusyModel` is deleted; `errTurnBusy` (chats, projects, regenerate, delete) and `SetStance`'s own guard are untouched. Three pieces turn the deferral into the visible thing §185 wanted:
+
+- **`dialBase`** — a dial builds on the parked config when one is already waiting, not on the live one. The slot holds exactly one config and each parking replaces it whole, so without this, queueing a provider and then moving the thinking level would snap the provider silently back. Two dials moved during one turn are two decisions, and both have to arrive.
+- **`ModelInfo.Pending`** — the queued switch travels to the window as its own shape, and only when one of the four dials actually differs: the slot is shared with MCP toggles, connections and sign-ins, none of which move this menu, and a chip announcing "next: the model you are already running" would be the app inventing a decision nobody made. Every live field goes on naming what is answering **right now** — a queued model's name on the chip would read as the model doing the talking, which is the confusion the queue exists to remove.
+- **`CancelPendingModel`** — a decision changed before it lands has to be droppable, or the only way out of a mis-click is to let the wrong model take over and switch back. It also files the live model back under its provider, undoing the `rememberModelForProvider` the dial wrote on the way in.
+
+The window draws one line above the dials — "รอบถัดไปจะใช้ *glm-5.2*" with a ✕ — and a timer mark on the closed chip, in the housekeeping weight rather than `.mm-warn`'s red: nothing has gone wrong, something is simply still to come. `endTurn` emits `model:switched` after applying the parked config, because a queued switch landing is the one engine change no click of the user's immediately precedes; only for the chat on screen, since a background chat has no picker to correct and `refreshDesk` re-asks the moment it is opened.
+
+**Many providers turned out to be the easy half.** The provider is one field of one `config.Config` travelling through one `bootstrap.Engine`, and §185 already established that the outgoing agent's context — tool calls included — is carried across wire formats. ollama → anthropic and glm-flash → glm-pro are the same code path with the same waiting room.
+
+**The queue is rehearsed, except where rehearsing would cost the turn.** A queue is a decision taken minutes before it lands, so `preflightQueued` proves it while the old model keeps answering: one 1-token completion through the same client chat uses, which tests the endpoint, the key and the wire format at once. That is the "เตรียมรอเลย" half of the ask, and with fifteen providers on the picker it is the half that earns its keep — a provider whose key was never set would otherwise announce itself at the boundary, by falling back to the built-in engine, with the next answer coming from somewhere nobody chose. `TestProviderConnection` was already this ping (its own comment: *"so a model can be proven before switching to it"*); `probeProvider` is that body split out, because the settings-page button resolves which model to ping from the open chat and a queue already knows. The verdict rides on `PendingModel.Check` — "checking", "ready", "failed" — with the latency label or the provider's own message beside it, and the window words it in the queued row, wrapping a failure's reason rather than trimming it.
+
+**The one provider class that is deliberately not rehearsed** is the one that runs the weights on this machine. For Ollama and LM Studio, "proving" the next model means *loading* it — into the same VRAM the model that is still talking is sitting in, 8 GB of it shared on the owner's machine — so the check could evict or OOM the very turn it was meant to protect. Those queue with no verdict at all. `runsWeightsLocally` is now the single spelling of that question, shared with the model-loading row (`desktop/model_load.go`), which exists for exactly the providers this one skips; the two used to have the same two names written out separately, and could have drifted apart.
+
+### 232.1 The check that cried wolf, inside the hour
+
+The owner walked into it before the change was an hour old, in his own window: a model-only switch on `opencode-go` queued correctly, the preflight pinged the same endpoint the running turn was streaming over, the ping outlived its own 15-second deadline, and the queued row announced "ต่อไม่ได้" about a provider that was visibly working — a red alarm on the healthy path, about a decision he had just made. Two corrections, both of them narrowing what a check is allowed to claim:
+
+- **A switch that keeps the endpoint it is already talking to is not pinged at all.** Same provider, base URL, key and wire format, only the model name moved: there is nothing here a request could establish that the turn in flight has not already established better. The probe now fires only when the endpoint itself changes, which is also the only case the check was ever written for.
+- **A ping that runs out of clock sets no verdict.** §189 drew this line for tool failures and it is the same line: a deadline says the answer did not arrive, not that the endpoint is down. `timedOut` matches both spellings for the reason §189 needed two — not every layer wraps `ctx.Err()`, and the flattened string is what an HTTP client actually hands back.
+
+The shape of the mistake is worth keeping: the check was correct about what it measured and wrong about what it reported, and it took a real endpoint under real load to show the difference. A check that fires on the healthy path is not a check.
+
+**What this does not do.** The answer in flight still cannot change model mid-sentence, for every reason §185 measured. The preflight proves reachability, not capacity: a provider that answers a 1-token ping and then refuses the real request on rate or context is still found out at the boundary. And a queue whose check fails is not blocked from landing — it is reported, and the switch is the user's to keep or cancel, because "this endpoint was down 40 seconds ago" is not the same fact as "this endpoint is down".
+
+**Verified:** `desktop/turn_guard_test.go` (a dial mid-turn is accepted, leaves `conv.cfg` and the reported model on the one answering, names the queue in `ModelInfo.Pending`, and lands at `endTurn`; a second dial builds on the first rather than replacing it; a cancel leaves the engine exactly where it was; a parked change that moves no dial draws no queue), `desktop/turn_guard_test.go` again for the preflight (a queued remote switch reports `Check: "checking"` in the very value the dial returns, and settles to `"failed"` with the reason on it, proven against 127.0.0.1:1 so the suite tests the wiring and not the internet; a queued switch that changes only the model is never pinged, which is the false alarm 232.1 came from; a queued local runtime is never pinged either), `desktop/frontend/src/test/modelQueue.test.ts` (the row names the queued model while the chip keeps the answering one; the ✕ calls back; a failed check shows the provider's own words and a proved one does not; nothing is drawn when nothing is queued). `go test ./desktop` and the 1291-test frontend suite green. Driven live in the dev app against a real turn: a switch accepted 1.5 s into a turn left `pending` = glm-5.3-flash with the engine still on glm-5.3, the menu drew "รอบถัดไปจะใช้ glm-5.2" with the chip unmoved, and the engine was on glm-5.2 with the queue empty the moment the turn ended.
+
+---
+
+## 233. Decision — A Stretch of Work Folds When Its Last Call Comes Back, Slowly Enough to Watch (2026-09-07)
+
+**Trigger:** the owner over a screenshot of his own turn — *"ตอนมันรัน tool เสร็จ มันควรจะพับเก็บอย่างสุภาพ แบบค่อยๆ ดุนุ่มๆ พอคิดออกไหม ตอนนี้มันแบบ พึ๊บไปเลย"* — and then, twice more, because the first two answers were each wrong in a different way: *"ทำไม tool ที่ทำงานเสร็จแล้วทำไมไม่พับเก็บเลย ทำไมต้องรอจบเทิน"*, and finally the whole thing in one sentence: *"ตอนที่มันรัน tool อยู่ มันก็แสดงของมันไป แล้วมีเพดาน แสดงผลของมันอยู่ เหมือนช่องคิดอ่ะ พอมันรัน tool เสร็จ ถึงตัวสุดท้าย ก่อนจะพูดประโยคถัดไป มันก็พับลงอย่างนุ่มนวลไง"*.
+
+**Four rules in one day, and the last one is his own sentence.** Worth writing down as a sequence, because each was a real fix for the one before it and each bought a new complaint:
+
+1. *Fold what has finished*, per row. It folded a call away in the frame its result landed: a skill that answered in half a second was on screen for one frame, and a delegate that had just come back took its card with it.
+2. *Fold nothing until the turn ends*, with a 190px scrolling window (`toolWindow.ts`) taking over the job of not building a wall. That held a whole turn's history open, and made the ending one big disappearance — the พึ๊บ.
+3. *Fold when the next sentence arrives.* Right boundary, one round late: a model can think for a minute between its last result and its next word, and the finished rows sat there for all of it.
+4. **Fold when the stretch goes quiet** — when the last call under this sentence comes back. Which is what he had been describing from the start.
+
+**Decision.**
+
+- **`working` is the only question `phaseBlock` asks.** A stretch with a call still out is one whole list, capped and scrolling, with a **line** over it — never a control, because nothing that is moving may be one click from being hidden. The moment nothing in it is out, the header becomes the control and the list folds into it. `live` no longer decides this; a finished bubble is simply a turn where nothing is running.
+- **The fold inherits the state it is handed.** A phase is marked open while it is still working, because the rows going into the fold are drawn by a *different element* from the rows coming out of it — twice over, at the working→quiet flip and again at the live→record handover. The key already survived both (`phaseKey`, on the engine's call id); nothing was setting it. `landing` says three things at once: draw it open, draw it at the live window's own height so the swap moves nothing, and skip the intro — the rows are not arriving, they were on screen already.
+- **The beat is asked again at the end of it.** A sentence is what opens a phase, so two rounds of tools can arrive under one; and the reader may have clicked the header, which hands the fold to them for good. Both are checked when the timer fires, not when it is armed.
+- **`settle`, a second transition beside `fold`.** This is the one movement in the app the owner asked to be able to watch, and all three of its differences are that same decision taken again: twice the duration (520ms), `cubicInOut` because `cubicOut` on an *outro* hangs and then drops, and an opacity that falls with the height — a clip against the row below is a cut however long you take over it. It also cancels `.phase`'s 8px gap, which a flex parent otherwise holds whole until the frame the child is removed, so the last pixels of the gentlest possible fold were a jump.
+- **A live phase header keeps the caret's 12px slot without drawing a caret.** It has nothing to open and claiming otherwise would be a promise it cannot keep — but without the slot the line jumped 18px right at exactly the moment the rows below it were being handed over gently.
+
+**What this does not do.** It does not fold a single row when that row finishes: calls run in parallel and come back out of order, so a per-row fold is a list rearranging itself under the eye while new rows still arrive at the floor. The stretch is the smallest unit the model itself marks. And **a delegation folds at none of these moments**, running or finished — a tool row is a receipt that folds into a count, a delegation is somebody else's work with a face on it, and "ซับเอเจน 1 ตัว" cannot stand in for that.
+
+### 233.1 The movement replayed itself every time he left the page
+
+Reported within the hour, and it is the failure mode a *remembered* animation always has: *"ไปหน้าอื่นแล้วกลับมามันจะพับให้ดูอีกรอบ ผมลองแล้วเป็นซ้ำๆ"*.
+
+`activeView` swaps Chat out whole (App.svelte), so opening a file mid-turn and coming back builds `openRows`, `landing` and the seeded set from nothing. The effect then met a stretch that had folded ten seconds earlier, found no record of it anywhere, and did the only thing it knew: opened it and played the whole movement again. Every time.
+
+**The rule that fixes it is worth more than the fix: the app folds what it WATCHED ARRIVE, and nothing else.** Work that was already over when the component first opened its eyes has no handover to make — it is a record, and a record is drawn closed and still. Work still in flight on that first frame is adopted the ordinary way, because its ending is still ahead of us. One flag (`drawnOnce`), asked only of a phase being seen for the first time.
+
+The alternative was to move the fold bookkeeping somewhere that outlives the component. It would have worked and it would have been wrong: the state that has to survive is not "which phases exist" — the transcript already knows that — it is "which movements this screen has already shown you", and that genuinely belongs to the screen. A component that has just been created has shown you nothing.
+
+**Verified:** `desktop/frontend/src/test/Chat.tools.test.ts` (a stretch folds mid-turn when its last call comes back, with the model yet to say anything and the turn still running; a stretch with a call still out never folds and keeps its cap; a second round of tools under the same sentence calls off a fold already armed; the rows are handed to the fold open and at the live window's height across the turn-end handover; a phase the reader has touched is left alone by the timer that was already armed; a running delegation is never inside the fold), `desktop/frontend/src/test/fold.test.ts` (settle is longer than fold, fades as it shrinks, eases at both ends, unwinds the container gap with the height, and honours reduced motion — as does fold). The 1349-test frontend suite green.
 
 ---
