@@ -7754,3 +7754,57 @@ And the "ponytail" on `win32Tab.destroy` is cut: it now `Close`s the controller 
 **Verified:** `desktop/browser_gestures_test.go` (double-click counts 1 then 2, right presses right, an unknown button is left and a count past three is three; a drag is moved/pressed/N moved with the button held/released, with the press paused and the release at the destination; wheel notches sum to the distance; chords carry the modifier bits, ctrl drops the character and shift uppercases it, aliases resolve, every named key has a code, an unknown key or modifier refuses the whole plan before the engine; zoom scales a point; a quoted coordinate is not zero; every point script measures and acts on nothing and walks up through frames; the answers name the point, what was under it, the focus, Escape for a right-click and capture on a painted page; `cursorTravel` is bounded), `desktop/browser_steps_test.go` (the first failure stops the batch and names the rest, every step passes the gate, the batch is in the block and the guidance), `desktop/browser_marks_test.go` (the cursor is not mounted through the ring's mount, the clear removes cursor and trail, the switch off means no wait and a remembered position), `desktop/browser_capture_test.go` (the scale note), `desktop/tool_coverage_test.go` (`browser_upload`). `go test ./desktop ./internal/skill ./internal/mode` green. Live, the owner driving glm-5.3-flash in the dev app (session 20260906-124446.604, nine captures under `output/…/work/`): a five-step batch on NotebookLM refused at step 2 because the page's buttons had not rendered yet and named steps 3-6 as not run — which is what taught `find` to wait (findWait, 3 s) — then a three-step batch typed the source, pressed แทรก and captured in one call; Sheets by coordinates put 42 in C3 with `type` reporting `focus ของหน้า: div#waffle-rich-text-editor…`; Docs `drag` over "world" then `key ctrl+b` came back bold and highlighted in the capture with no arrow or trail in the picture; Slides `click button:right` on the title changed focus to `div.goog-menu` and `read` listed the menu, `key Escape` gave focus back to the editor; on the fixture page hover, double-click, right-click, `key ctrl+a`, `upload` (100 KB, the page's change handler printed the name) and an aimed `scroll` over a wheel-only canvas all reported trusted events, while the unaimed scroll moved nothing — as the change note said. "hover me" and a double-click on a paragraph refused because neither was a control, which is what added the plain-text fallback to `find`. `click find "Learn more"` on example.com came back with the change note naming the new page and its refs, so no read followed. The owner, watching: *"มันทำงานได้แล้วครับเจ๋งมาก"* — and, on the cursor's first cut, *"เมาส์มันค้าง ๆ … เหมือนวาปไปมา"*, which raised the travel ceiling to 800 ms with ease-in-out and made a capture hide the arrow instead of removing it.
 
 ---
+
+## 229. Decision — Who the User Is Is Not a Note About the Machine, and It Goes Everywhere (2026-09-06)
+
+**Trigger:** *"ผมว่าจะเพิ่มระบบความจำอีกชั้นคือแบบ จำว่าผู้ใช้ชอบบอกให้ทำอะไรบ่อย ๆ หรือ ระบบพยายามจำว่าผู้ใช้เป็นใครอะไรมาจากไหน … ดู hermes เป็นแบบอย่าง"*, and then, on the proposal: *"ผมว่า USER.md ไปทุกที่เลยดีกว่า"*.
+
+Design: [user-profile-and-habits-2026-09-06.md](architecture/user-profile-and-habits-2026-09-06.md). Step 1 of three is what shipped; steps 2 (recurring requests) and 3 (a per-session review) are written down there and are not built.
+
+### 229.1 The store had already answered the question, twice
+
+Read before anything moved (§180). Sixteen `memory` proposals have ever existed on this machine, over three days:
+
+| the proposal was about | proposed | approved |
+|---|---|---|
+| **the user** — who he is, what he builds, what he likes doing, how he wants things done | 7 | **4** |
+| **the machine** — the Ollama path, a hotkey in the registry, WSL leftovers, OMEN Hub settings, a venv's VC++ dependency, a GPU registry key | 8 | **0** |
+| **a rule to itself** — *"ก่อนสร้าง UI … ต้องเปิดอ่านสกิลที่เกี่ยวข้องก่อน"* | 1 | 0 |
+
+Every line the owner has ever kept is about himself. Not one line about the machine survived, and the two that mention hardware and did survive are both phrased as facts about *his* setup and *his* attitude to it. The tool's description says "this user or machine" as though that were one bar. The person applying it has been holding two, and one of them has a 0% rate.
+
+So the split is not a new idea imported from Hermes. It is the shape of a judgment already being made, given a file to land in.
+
+### 229.2 What shipped
+
+**`USER.md` beside `MEMORY.md`** (`learned.UserScope`, `<DataRoot>/memory/USER.md`), with its own header, its own row on the review page, and **its own ceiling of 2 KB** — a quarter of every other scope's 8 KB (`learned.MaxBytesFor`). The budget is where the cost argument lands, for the reason in 229.3.
+
+**`about`, required, no default** — `user` or `machine`. `where` got its default moved onto the desk at §184 because the desk *knows*: coding work settles project decisions wherever it is done. Nothing but the model knows whether the sentence it just wrote is about the person or the computer — a coding session learns both — so this one is refused when absent, with both words named, in the same shape §139 gave a `replace` that names nothing. `about: user` resolves to the profile whatever the desk's architecture says and whatever `where` says: who somebody is cannot be true of one project only.
+
+**Two sentences the file's own history had earned.** *"Write a fact, never an instruction to yourself"* — the only proposal this machine ever made in the imperative was refused, and deserved to be: an order stored here is read in every later session and outranks whatever the user asks for then. Hermes states the same rule with the better reason, so it is stated rather than exemplified. And *"how to do a kind of work belongs in the skill for that work"*, which closes the only exit that refusal left open.
+
+**`learned.Screen`** refuses text carrying invisible or direction-changing characters, before the queue rather than before the file: a card the user cannot read correctly must never be drawn for them to approve.
+
+### 229.3 The line the owner moved, and what it cost
+
+The proposal had the profile read by the assistant, the desks and a chair, and **not** by a worker on a delegated job — §184.5's boundary, unchanged. The owner moved it: *"ผมว่า USER.md ไปทุกที่เลยดีกว่า"*.
+
+He is right about what that boundary was for. §44 is a cost argument — a single-brain agent's prompt grows with everything it has ever learned, and the scope split is what stops that. What each agent learned *doing its job* is the part that grows, and it stays exactly where it was. Who the user is does not grow. It is one short paragraph about a person, and a worker that does not know it writes in the wrong language, at the wrong level, for the wrong project.
+
+So the boundary moved from *who reads it* to *how big it may be*, and the 2 KB is not a round number chosen for tidiness — it is the whole of the concession. `subagent.PromptFor` folds it above the worker's own memory; a machine with no profile approved yet gets every prompt byte for byte as before, which is the promise the two folds around it already made.
+
+**The write side did not move.** A delegate's `memory` tool is not offered `about` at all, so there is no word its tool call can say that resolves to `USER.md` — the boundary is held by the schema, not by the model's cooperation. A worker never speaks to the user, so it has no evidence to write a profile from anyway.
+
+### 229.4 What was deliberately not built
+
+**A keyword scan for injected instructions**, which Hermes runs at the same point. Aetox's defence is a different one and already there: nothing in this package writes itself, so a person reads every line before it is kept. A blocklist would repeat, badly and in one language, the judgment they are already making. What a reader genuinely cannot do is see a zero-width joiner or a right-to-left override, so that is the check that exists and the only one.
+
+**A migration of the four approved lines.** They are about the user and they are sitting in `MEMORY.md`. Guessing which of somebody's remembered lines belong in which file is exactly the judgment this decision just moved *to* the model and the user, so it is not automated behind their backs; both files are plain markdown they are invited to edit, and both are on the settings page.
+
+### 229.5 What generalises
+
+**A description that offers one bar to a model whose reviewer is applying two will get a 0% approval rate on half of what it proposes, and nothing will say so.** The tool worked, the queue worked, the approvals worked; the only symptom was a column of ไม่เอา that looked like the model being wrong rather than like a question being asked badly. It took counting the rejections by subject to see it — the same move §184 made on `where` and §213 made on who was reading the description.
+
+**Verified:** `internal/learned` (the profile is USER.md with its own header and its own smaller ceiling, a delegate can neither see nor name the scope, `about` is refused when absent and when invented, a user fact lands in the profile from a project-first desk with `where: this-project` on it, `Screen` catches an override and passes ordinary Thai and English), `internal/prompt` (identity → profile → machine, in that order; the report names the file; an unwritten profile folds nothing), `internal/subagent` (a worker knows who the work is for and not what the assistant learned; an empty profile changes no prompt byte), `desktop/learning_path_test.go` (a live turn on `aetox-tools:test` files a user fact under USER.md, approval writes it, and it does not also reach the shared file), `desktop/frontend/src/test/memoryScope.test.ts` (the scope's colon does not render it as a desk). `go test ./...` and the frontend suite (122 files, 1,188 tests) both green.
+
+---
