@@ -7566,6 +7566,47 @@ So the body keeps what is true on every job, the skills keep what is true on one
 
 **What this does not do.** A delegate's state was never persisted, so a delegate the close ends leaves no row — the tray simply does not show it next launch, which is what it did before. A turn that outlives the grace still loses the partial text it had streamed; only its question and its ending survive. Both are recorded here rather than solved.
 
+## 220. Decision — An Edit Is a File, and It Leaves by Two Doors (2026-09-04)
+
+**Trigger:** the owner sent a 33-minute clip of somebody editing video with Claude Code (Andrew Warodom, *"ผมให้ Claude ตัดต่อวิดีโอให้ผม"*) and asked the honest question — *"เราจะ ถอดอะไรมาใส่ในเอเจนตัดต่อเราได้บ้างหรือ เราดีกว่าอยู่แล้ว"*. Eight of the ten things demonstrated were already here and several in better shape: he installs Node and a skill by hand, we fetch a pinned SHA256 bundle behind one button; his rough cut is `ii23-clean-cut`, ours is `video_ai_remove_silence` + `video_merge`; his parallel render of ten clips is a thing this house had already **measured against itself** (`3e977aa`: fewer workers is faster) and ruled out in §4474. One thing he had was real, and the owner named it in four words: *"ไฟล์ที่แก้ต่อได้สำคัญมาก"*.
+
+**The gap, stated properly.** Both roads out of the `editor` agent ended at an mp4 — the answer to "what did you decide" in the one form nobody can argue with. Move one cut and the whole thing is rebuilt from a sentence, minutes of somebody's machine at a time, and the user who wanted three seconds back has no way to reach in and take them.
+
+### 220.1 The first half was already installed and not handed over
+
+kinocut ships a **Cutfile**: a JSON edit document whose parent folder is the workspace, which a person opens, disagrees with, edits by hand and renders again. Our allowlist of 54 tools (`videoEditorTools`) had never selected it, so the agent could not know it existed. Three names — `video_init_project`, `video_cutfile_validate`, `video_cutfile_render` — 1,976 characters, ~500 tokens, for the difference between handing back an mp4 and handing back the decisions that made it.
+
+**Re-measured while there, and the method changed.** The 30 ส.ค. figures counted schemas; this pass read a real `tools/list` off the running server and counted whole tool objects as they cross the wire: 196 tools = 183,780 characters, the list = 61,899. ~46,000 tokens against ~15,500. Both methods agree on the ratio; the newer one matches what a request actually carries, and [docs/VIDEO-EDITOR.md](VIDEO-EDITOR.md) now says which is which rather than quietly holding two.
+
+**Its reach is bounded and the agent is told so** rather than discovering it in an error: a Cutfile lowers to the workflow engine's nine allowlisted ops — `trim, merge, crop, resize, convert, add_text, burn_in, composite_layers, probe`. That is a picture edit. Nothing about audio goes in one, and a cut list presented as the whole edit when the sound was done beside it is a worse account of the work than no file at all.
+
+**A trap found by trying it, not by reading about it.** `video_init_project` scaffolds `cutfile.yaml`, and kinocut's YAML support is that scaffold and nothing more — a key and a flat value. Fill it in with real sources and real operations and `_parse_simple` returns `{"sources": [], "ops": []}` with the extra lines flattened into junk keys; `validate_cutfile` then **succeeds** on an empty edit, and the failure only surfaces later as "cutfile has no operations". Verified against the installed 1.15.0. The rule — write `.json` — is now in `editor/AGENT.md`, in the settings doc, and enforced by `video_project` itself, which refuses a `.yaml` with a message naming the fix.
+
+### 220.2 The second half nothing had, including the tool that claims to
+
+The obvious candidate was kinocut's own `video_otio_export`, and reading `multipliers/otio_io.py` killed it: it emits one `Clip.1` per IR node with **no `media_reference` and no `source_range`** — no file, no time. Nothing in Resolve, Premiere or Final Cut can open it; it is the Timeline IR wearing OTIO's name, for round-tripping back into kinocut. Allowlisting it and calling it "a project you can edit" would have been the claim, not the file. It stays out, with that reason written at the allowlist so nobody adds it again on the strength of its name.
+
+CapCut's `draft_content.json` — the format the video demonstrates injecting into — is closed, reverse-engineered, and breaks on somebody else's release schedule. EDL carries cuts and nothing else. **FCPXML** is documented, is plain XML, and is imported by Resolve (free), Premiere Pro and Final Cut, which is the whole point of handing someone a project instead of a video. Owner picked it.
+
+**So Aetox writes it, and that is not a reversal of "Aetox does not write the editing engine".** A serializer is not an engine. `internal/ooxml` already writes a Word document byte by byte for exactly the same reason: the format is the deliverable, and a model hand-writing it produces files that fail to import — silently, which is the worst kind. kinocut still does every frame of the actual work.
+
+### 220.3 What was built
+
+- **[`internal/nle`](../internal/nle/fcpxml.go)** — `Timeline` → FCPXML 1.10. Sources with their real dimensions and rates, a spine of `asset-clip`s, a format per distinct source shape (declaring a 4K phone clip as 1080p is how an importer decides to scale something nobody asked it to). Media addressed with `net/url`, because a Windows path with a drive letter and a space has to arrive percent-encoded behind three slashes and a string joined by hand gets it wrong every time.
+- **[`internal/skill/video_project.go`](../internal/skill/video_project.go)** — reads the Cutfile, probes each source with ffprobe, writes the project beside it. It reads the cutfile **rather than taking its own arguments** so there is one account of the edit: a project that disagreed with the render would be worse than not offering one.
+
+**Every time in the file is exact, and that is the property the package exists to keep.** FCPXML states time as a rational number of seconds and an importer may reject a value that is not a whole frame. Seconds never survive into the output: they convert to a frame count once, at the edge, and everything after is integer arithmetic over one denominator (`100/3000s` at 30, `1001/30000s` at 29.97 — the rate arrives from ffprobe as `30000/1001` and is never turned into a float on the way past). A cut half a frame from where the agent asked for it lands on the wrong side of a word, and floating point is how that happens without anything saying so. `Place()` returns the frame arithmetic on its own so the report a user reads and the file they open cannot drift apart.
+
+**What does not travel is named, never dropped.** `add_text`, `burn_in`, `crop`, `convert`, `composite_layers` and a trim of another step's output all come back in the report as "not carried" — in the user's editor they look like work that was never done rather than work that could not cross, and only the person who ran the tool can tell them apart.
+
+**Two placements worth stating.** It is filed `CategoryMedia` — the group is what a tool is *for*, and the desk that carries video is this one — while its **safety assessment sits with the writers, not with the family it is filed under**: `image_ocr`, `video_ocr` and `audio_transcribe` are reads and belong in the read-only catch-all; this one puts an `.fcpxml` on disk and is pinned against `doc_write` in `safety_test.go`, so an edit that lets it fall through to the catch-all fails there instead of shipping a writer that skips the approval every other writer passes.
+
+**No `output` parameter, and that is a decision.** The cutfile's folder is the workspace its media paths are relative to, so the project belongs beside it under the same name. The parameter that would let it go elsewhere cost 23 tokens of the 80-token block ceiling (measured: 102 with it, 79 without), and the judgment layer moved to `Guidance()` where it is sent once — the block standard applied rather than exempted.
+
+**Proved, not asserted.** End to end on this machine: a 12s 640x360 clip, a cutfile trimming 2.0 for 4.0 then resizing to 480x270, `video_cutfile_render` returning exactly 480x270 and 4.000000s with audio and a receipt; and `TestWritesAProjectFromARealClip` building a clip, exporting a two-clip spine and reading its own timecodes back. `go test ./internal/skill/ ./internal/nle/ ./internal/safety/ ./internal/mode/... ./internal/subagent/... ./desktop/` green.
+
+**Still open, named rather than left to be discovered:** word-level Thai subtitle timing — the video's other real idea, and the one that shows on screen. `internal/stt`'s `Segment` carries `StartMs`/`EndMs`/`Text` and nothing finer, and whether kinocut's `video_generate_subtitles` can do word-level was not checked. A karaoke caption in a language with no spaces between words is its own decision and has not been made here.
+
 ## 222. Decision — The Coding Desk Finishes Its Turn, and a Hook's Verdict Reaches the Model (2026-09-05)
 
 **Why Claude Code's loop runs long and ours stopped early, and what closed the gap for the price of a paragraph and a field.**
