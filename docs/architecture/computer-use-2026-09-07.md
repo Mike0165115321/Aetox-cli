@@ -168,11 +168,11 @@ first row honest — without it, "แอปใดก็ได้" is a switch ov
 
 ## 5. The rows — plan and record in one table
 
-Nothing here is built yet. This table is where each row's status is kept true.
+Row 1 is built (2026-09-09). Nothing else is. This table is where each row's status is kept true.
 
 | # | Row | Mechanism | Needs installing? | Status |
 |---|---|---|---|---|
-| 1 | แอปใดก็ได้ | Windows UI Automation (`IUIAutomation` over COM) — element tree, invoke/value patterns | no (OS component) | `Proposed` |
+| 1 | แอปใดก็ได้ | Windows UI Automation (`IUIAutomation` over COM) — element tree, invoke/value patterns | no (OS component) | `Direct` — built 2026-09-09, [DECISIONS.md §239](../DECISIONS.md); see §9 |
 | 2 | Google Chrome | extension + native messaging host, against the user's own profile | yes — extension | `Proposed` |
 | 3 | Microsoft Edge | same extension, store or sideload | yes — extension | `Proposed` |
 | 4 | Microsoft Excel | COM automation of a running workbook, or an add-in | to be decided | `Deferred` — `sheet_write` covers the file case today |
@@ -240,3 +240,41 @@ user did not choose to show us** and then acts on it.
 
 Steps 1 and 2 are the ones that make the register true; nothing after them changes
 its shape.
+
+---
+
+## 9. Appendix — what building it added (2026-09-09)
+
+Appended rather than edited into the sections above, because §0 says the shape
+here is settled and a settled decision that quietly changes is worse than one
+that is amended in public. Everything in §1–§8 still stands. Implementation is
+[DECISIONS.md §239](../DECISIONS.md).
+
+**Two actions joined §4.1's six.**
+
+| Change | Why |
+|---|---|
+| **`capture` added** | `browser` has one and half the models in the picker have eyes. It is a picture of ONE window, taken by asking that window to draw itself, so nothing behind it or on another monitor is in it — which is why it does not cross §6.4's line against screen recording. It is for SEEING, never for aiming: a picture has no refs, and `read` is what a click is aimed by. |
+| **`keys` folded into `type`, not made an action** | Both are typing. A user deciding "Aetox may type in this program" has not thereby drawn a line between a word and ctrl+s, so a separate permission would be a right nobody asked for and nobody would understand. |
+
+**One thing §4 did not decide, and the owner did: the screen is taken.**
+
+An acting call raises the window it works on, holds a machine-wide lock, and
+lights the whole edge of the screen for as long as it is driving. That is the
+Codex-on-Windows model rather than the macOS one, chosen deliberately: a change
+made in a window the user never saw is a change they cannot check.
+
+The light is a window of its own — layered, click-through, never activated,
+always on top — because the strip inside Aetox's chat is *behind* the window
+being driven at exactly the moment it matters. The owner found this by watching
+it run: *"ขอแสงวิวับที่ทำไว้อ่ะมาครอบจอด้วย ไม่งั้นไม่รู้"*.
+
+**§5's table, updated.** Row 1 is `Direct`. Rows 2–3 are unchanged and are drawn
+in Settings as *ต้องติดตั้งก่อน*, which is §4.2's rule about a row that stays
+visible and says why. Row 4 is unchanged and `Deferred`.
+
+**§6, in code.** Each line is now a place rather than a promise: 6.1 is the
+untrusted-data preamble on every read and capture; 6.2 is `IsPassword`, refused
+in two places on purpose; 6.4 is a window capture rather than a screen one, and
+a `list_apps` that omits what it will not touch; 6.5 is a process-id check and a
+name check, because a second copy of Aetox is still Aetox.

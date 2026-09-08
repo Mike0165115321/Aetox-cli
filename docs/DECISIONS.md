@@ -641,7 +641,7 @@ What "Job Object still covers those at exit" understated: it covers them **only*
 3. **`edit` loaded any file entirely into memory** ([edit.go](../internal/skill/edit.go)) — `data`, the string conversion, the `Replace` result and the write-back are four live copies, so a few hundred MB of generated log was enough to end the process. A 16 MiB stat guard refuses early with a message telling the model what to do instead. No source file, lockfile or config comes near it.
 4. **`write` and `delete` echoed the resolved absolute path** while `edit` echoed the relative one. Made consistent — the absolute form is token noise that also nudges the model toward repeating the sandbox root back at the user, against `internal/prompt`'s environment rule.
 
-Checked and deliberately left alone: `image_ocr` (tesseract stdout is one image's text), `video_ocr` (ffmpeg runs at `-loglevel error`), `rtk` (bounded by the input it filters), `computer` (a PowerShell result). Also verified the project's own "every `exec.Cmd` passes through `HideConsole`" invariant (§`917b550`) still holds at every one of the eleven spawn sites.
+Checked and deliberately left alone: `image_ocr` (tesseract stdout is one image's text), `video_ocr` (ffmpeg runs at `-loglevel error`), `rtk` (bounded by the input it filters), `computer` (a PowerShell result — *that tool was deleted the same day, 2026-07-25; the reach that replaced it in §239 spawns nothing*). Also verified the project's own "every `exec.Cmd` passes through `HideConsole`" invariant (§`917b550`) still holds at every one of the eleven spawn sites.
 
 **Measured, not assumed:** `read` costs ~0.65ms and shell ~39ms per call end-to-end on Windows (200-iteration benchmarks). Sandbox path resolution dominates the file tools at ~0.6–1ms — the cost of §28's symlink containment — which is noise beside a model round trip, so the cache-the-root upgrade path stays a `ponytail:` note rather than code. Shell is dominated by cmd.exe process creation, unchanged by anything here.
 
@@ -8194,3 +8194,62 @@ That is a shrink of the prose and **not** of the state. §106.10 requires a chec
 Drawn against the real stylesheets in both themes before shipping, which caught two things that fail silently: section headings set **dimmer than the prose under them** (an inverted hierarchy the eye has to climb back up), and a failed step's reason set in the faintest ink the theme has — against the rule written two lines above it in the same file, that a failed step is a finding and stays readable.
 
 **Owed:** ประตูส่งไม้ still, though it is now one door from existing — the run is the acting half, and what is missing is opening it in a *coding* session rather than this one. And a third gate, if it is ever wanted: a `reviewer` delegate above the two here. It is deliberately not built, because the mechanical gate is the one that cannot be talked around and a model gate on top of it would mostly add cost.
+
+---
+
+## 239. Decision — The Reach Comes Back as a Tree, Not as a Screenshot (2026-09-09)
+
+**Trigger:** owner — *"ผมว่าจะทำให้ Aetox ควบคุมคอมพิวเตอร์ได้เหมือน Codex ครับ"*, then *"ลองไปดู Codex ก่อนก็ได้ หรือเจ้าไหนก็ได้ครับ ศึกษามาเป็นเคสเลย"*. This is the implementation of steps 1–3 of [computer-use-2026-09-07.md](architecture/computer-use-2026-09-07.md) §8, and that file, not this one, is where the shape was settled. Read it first; this section records what building it changed, and the two places it went further.
+
+### What the study found, and what we took
+
+| | Codex macOS | Codex Windows | Claude Desktop |
+|---|---|---|---|
+| Reads the screen by | screenshot + AX tree | screenshot only | screenshot, downscaled |
+| Mode | background, its own cursor | foreground, takes the desktop | hides other windows |
+| Approval | per app, "always allow" | every action | per app, per session, tiered |
+| Refuses | terminals, itself, admin, security prompts | — | browsers view-only, terminals click-only |
+
+Taken: off by default; never drives itself; one session drives at a time; a stop that always works; a tier per kind of program; and the order **connector → `shell` → `browser` → `computer`**, which both products enforce twice, in the model and in the permissions, because the broadest tool is also the slowest and least precise.
+
+Not taken: **session-scoped grants.** Both expire an app approval when the session ends. [workspace.go:186](../desktop/workspace.go) already settled this for folders — *"there is deliberately no 'allow once': a right that is not on the list is a right the panel has stopped describing"* — and a session grant is an allow-once with a longer fuse: it disappears without being revoked, so the user never learns what they granted, and it re-asks for something already decided. A yes becomes a `safety.PermissionRule` in `permissions.json` and a row in Settings with a button to take it back. `config.SavePermissions` did not exist before this; every rule in that file had come from the user's own hand or from bootstrap.
+
+Not taken either: **aiming by coordinate.** Codex on Windows reasons entirely from screenshots, which works because it is one model that was trained to. Aetox runs 19 providers including local ones, and most of those cannot point at a pixel. The reach aims at UI Automation elements instead, numbered `[n]` exactly as `browser_read` numbers a page — so a model that has learned one has learned the other, and a model with no eyes at all can still use it.
+
+### What building it changed from the plan
+
+- **The ref table stores runtime ids, not COM pointers.** The plan said keep both and fall back. A UIA element pointer is apartment-bound with a lifetime nobody on this side controls; re-finding by runtime id is one tree walk, measured in tens of milliseconds on a real window. So no pointer outlives the call that made it, and *"the pointer died"* is not a state this code can be in.
+- **`capture` was added** to §4.1's six actions, and **`keys` folded into `type`** rather than becoming a seventh. Both are recorded as an appendix on the direction doc rather than edited into it.
+- **A raise that Windows declines does not fail the action.** Invoke and SetValue go through the control, not the keyboard, so a press lands whether or not the window came forward. `keys` is the exception and stops, because a shortcut really is addressed to whatever has focus.
+
+### Why it will not fail the way §22 did
+
+§22's tool was deleted rather than debugged. The post-mortem found exactly two lines in it that could report a failure at all, and both said `failed`. A locked screen, a higher-integrity window and a declined focus change were one sentence, so the transcript could not tell them apart and neither could anyone reading it.
+
+- **`computer_errors.go` is that fix, and it is the feature rather than its polish.** Every failure resolves to a sentence naming the one thing that changes what to do next. `TestNoReachFailureIsJustFailed` fails when a new code arrives without one.
+- It caught a real bug immediately. `SetForegroundWindow` returns zero and sets **no** last error when Windows declines a focus steal; the first version mapped that silence to access-denied and told the live test the machine was locked while the window sat plainly on screen, unlocked. That is §22's fault reproduced in miniature and caught in an afternoon instead of shipping.
+- **The live test opens its own window and drives it** ([computer_live_windows_test.go](../desktop/computer_live_windows_test.go)). Thai text typed into a real application and read back character for character is the assertion the whole rebuild answers to: synthesized keystrokes pass through a keyboard layout that can fail silently, and handing the string to the provider has no layout in the middle of it.
+
+**The release rule stays, and is sharper.** §22's own status line says the tool was *"live-verified on the dev box"* and it still failed in the installed application; the console-window bug five hours earlier was hidden the same way (*"dev never showed it because `wails dev` has a console the children inherit"*). Twice, dev mode was what hid the failure. So the checklist below runs on the **installed exe**, not `wails dev` and not the CLI.
+
+### The light around the screen
+
+Added after the owner watched it run: *"ขอแสงวิวับที่ทำไว้อ่ะมาครอบจอด้วย ไม่งั้นไม่รู้"*.
+
+The takeover strip is drawn inside Aetox's own window, and the foreground model raises the window being driven **over** Aetox — so at the one moment the strip matters, it is behind the thing it warns about. The signal moved to a layered, click-through, never-activated, always-on-top window across the whole virtual desktop, drawing the beam from [style.css](../desktop/frontend/src/style.css) with GDI. It lingers 2.5s past each action, because an acting call is under a second and lighting per action would strobe the edge of the screen — the same *"light show"* the owner had already had removed from the delegation cards and the sidebar.
+
+### Release checklist — on the installed exe
+
+1. `computer list_apps` sees the windows and marks which are not yet allowed.
+2. First `read` raises the approval card; a yes puts the program in Settings → การใช้คอมพิวเตอร์.
+3. **Thai typed into a real field and read back exactly.** The one that decides it.
+4. `capture` returns the window with no Aetox in the picture.
+5. `click` presses a real control in a dialog.
+6. Windows Terminal is refused and the refusal names `shell`.
+7. Lock the screen and act: the answer says there is no input desktop, not "failed".
+8. Stop mid-run: the light goes out and nothing moves after.
+9. Switch off in Settings: every action refuses.
+
+**Status:** `Direct` for row 1 of the direction doc's §5 table. Rows 2–3 (the browser extension) are drawn honestly in Settings as *ต้องติดตั้งก่อน* and are not built. `focus`/`click`/`type`/`close` ship behind the same switch as the reading half.
+
+**Not built, deliberately:** aiming by `x,y` for models that can (one field on `click` whenever it is wanted); macOS and Linux, which need a different API and a different permission model each; and holding the other desktop-hosted tools to the block-size standard — ten of them are already over it, and imposing a new limit on `memory` and `browser` inside a computer-control change is a change nobody reviewed.
