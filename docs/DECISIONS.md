@@ -8258,3 +8258,19 @@ The takeover strip is drawn inside Aetox's own window, and the foreground model 
 **Status:** `Direct` for row 1 of the direction doc's §5 table. Rows 2–3 (the browser extension) are drawn honestly in Settings as *ต้องติดตั้งก่อน* and are not built. `focus`/`click`/`type`/`close` ship behind the same switch as the reading half.
 
 **Not built, deliberately:** aiming by `x,y` for models that can (one field on `click` whenever it is wanted); macOS and Linux, which need a different API and a different permission model each; and holding the other desktop-hosted tools to the block-size standard — ten of them are already over it, and imposing a new limit on `memory` and `browser` inside a computer-control change is a change nobody reviewed.
+
+## 240. Decision — An Empty Model List Is a Question, Not a Verdict (2026-09-09)
+
+**Trigger:** the owner, with a screenshot of the composer's model menu — *"แย่แล้วครับ บั๊คเลืือกโมเดลไม่ได้"*. Two rows carried a dropdown (ระดับการอนุมัติ, ผู้ให้บริการ) and the third, โมเดล, carried `qwen3.5:9b` as plain text. The menu whose main job is choosing a model was the one place a model could not be chosen.
+
+**Nothing was broken in the switch.** Ollama was not running — nothing listening on 11434 — so `/api/tags` answered nothing. The `ollama` row in [catalog.go](../internal/provider/catalog.go) carries no `FallbackModel` on purpose, and that is still right: a local runtime serves whatever was pulled, so any name written there is a guess that fails as *model 'x' not found* against a server that is working fine. `ListModelsForProvider` returned `[]`, exactly as designed.
+
+**The gap was a contract stated in one language and answered in another.** `ListModelsForProvider`'s own doc comment says an empty result means *"no known models — the frontend should offer a free-text input for a custom model id"*. Settings has honoured that since §200 ("the card keeps its type-your-own-id field for the model a vendor renamed"). The composer's menu answered it with a `<span>` and an HTML comment reading *"custom model ids are set in Settings"* — a pointer written to a reader who cannot see it. A comment is not a UI.
+
+- **Three states, not two.** A list draws the dropdown; a fetch in flight says it is loading; a fetch that came back empty draws the box. The loading state is not decoration: without it every menu open drew the empty shape for one round trip, including on providers that do have a list.
+- **The box is seeded with the model in use**, so the row still answers "which model is this" — the one thing the dead text did do, and the reason it survived this long.
+- **The way back to a real list is on the same panel.** A user who reads "ยังไม่ได้รายชื่อโมเดลจาก ollama" and starts the server must not have to close the menu to be believed, so the line carries ลองใหม่ and asks again in place.
+
+**Deliberately not done:** no fallback model invented for `ollama` (§200's reasoning holds), and no Go touched at all. The backend's contract was correct; only the screen was not keeping it. What this still does not do is *say why* the list is empty — a server that is down and a key that is refused arrive here as the same `[]`, and telling them apart is a signature change, not a fix to a picker.
+
+**Verified:** [modelCustomId.test.ts](../desktop/frontend/src/test/modelCustomId.test.ts) — the box carries the model in use, a typed id reaches `onSwitchModel`, the line names the provider and the retry brings the dropdown back, and a slow list never draws the empty shape on its way in.
