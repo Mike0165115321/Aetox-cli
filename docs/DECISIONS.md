@@ -7946,3 +7946,251 @@ The alternative was to move the fold bookkeeping somewhere that outlives the com
 **Verified:** `desktop/frontend/src/test/Chat.tools.test.ts` (a stretch folds mid-turn when its last call comes back, with the model yet to say anything and the turn still running; a stretch with a call still out never folds and keeps its cap; a second round of tools under the same sentence calls off a fold already armed; the rows are handed to the fold open and at the live window's height across the turn-end handover; a phase the reader has touched is left alone by the timer that was already armed; a running delegation is never inside the fold), `desktop/frontend/src/test/fold.test.ts` (settle is longer than fold, fades as it shrinks, eases at both ends, unwinds the container gap with the height, and honours reduced motion — as does fold). The 1349-test frontend suite green.
 
 ---
+
+## 234. Decision — Per-Chat State Is Decided at the Switch, Because the Guard on the Way In Cannot See It (2026-09-08)
+
+Owner, after Tab typed the wrong conversation's answer into a composer: *"ตอนนี้มันข้ามเซสชั่น มันข้ามไปมันคือบั๊ค มันควรผูกกับเซสชั่นครับ"* — and then, told it was the third of its kind: *"ควรจะมีเอกสารกำกับไม่ให้เกิดอีกไหม"*
+
+He is asking the right question about the right thing. The bug is small. That it is the third one is not.
+
+### 234.1 Three bugs, one missing decision
+
+| | What the user saw | Fixed |
+|---|---|---|
+| Desk file tab (§187) | A background chat's deck opened on the desk in front of somebody reading something else — and the on-screen chat then saved the stray as its own, so it survived restarts | 2026-08-26 |
+| Undo chip | "ย้อนกลับ (1)" over a chat that had never run a turn, offering to put back a file another conversation wrote | §187-era |
+| Prepared wording | Tab typed an answer to a question asked in a conversation the user was no longer looking at | today |
+
+All three are per-chat state living on `cockpit`, and all three were fixed in the same function — `arriveAt()`.
+
+### 234.2 Why the same thing was missed three times, which is not carelessness
+
+**In every one of them the arriving event was already guarded.** `routeDeskEvent` routes on `sessionId`. `applyPreparedReplies` opens with `if (id && cockpit.openSession && id !== cockpit.openSession) return`. Somebody had already thought about cross-session leakage and written the check.
+
+The check is on the wrong door. State does not only arrive by event — it arrives by **already being there**, put on `cockpit` while the chat was on screen and legitimately its. The switch is what makes it wrong, and a guard at the event cannot see a switch.
+
+That asymmetry is what makes this class survive review: the reviewer looks at the incoming path, finds a session check, and is satisfied. The outgoing path has no code to look at. **A missing decision has no line to read.**
+
+### 234.3 The four answers, and the trap in the third
+
+- **Nothing** — the app's, not a chat's.
+- **Drop and ask again** — right whenever the engine still knows it: `undoFiles`/`refreshUndo`, `taskChips`/`refreshTaskChips`, and desk/chair/space/stance/model, all re-read at the tail of every door. Cheap and cannot go stale.
+- **`parkLive`/`restoreLive`** — live turn state, so a chat left working comes back mid-flight.
+- **A map of its own** — pushed once, stored nowhere, so dropping it destroys what nobody can hand back.
+
+**The trap is that `parkLive` is gated on `awaitingReply`.** It holds chats caught *mid-turn*. A prepared wording exists precisely *because* a turn ended, so it can never satisfy that gate — reaching for the obvious mechanism would have looked like a fix and changed nothing. Hence `preparedParked`, a map of its own, and the fourth answer earning its place.
+
+**Park rather than drop, for this one field, for a reason worth stating:** the wording is pushed on `composer:prepared` and stored nowhere, so there is no `refreshPrepared` to call. Dropping it would mean a glance at another chat destroys an offer that cost a model call to write.
+
+### 234.4 The line between the composer and the conversation
+
+`draft`, `pendingFiles`, `pendingContexts` and `pendingImages` also survive a switch, and they are staying that way. It is not an inconsistency, and the line is worth writing down because the next person will ask:
+
+> **What the user typed follows the user. What one chat asked belongs to that chat.**
+
+A half-written sentence and a staged attachment are the user's, mid-thought, and emptying them because they glanced at another conversation would be the window throwing away work. A prepared wording is not something the user wrote — it is an answer to a question one conversation asked, which is why it goes with that conversation and why the offer means nothing anywhere else.
+
+### 234.5 What actually stops the fourth one
+
+A comment on `arriveAt()` saying "decide here", because that is where the fix always goes — **and a test, because a comment is only read by somebody already in the file, and the person adding a field to `CockpitState` is in a different one.**
+
+`cockpitBelongsToAChat.test.ts` reads `Object.keys(cockpit)` at runtime and requires every one of the 50 fields to appear in a table naming which of the five kinds it is. Add a field, and the suite fails with the question in the failure message.
+
+**It deliberately does not check that any field is handled *correctly*.** A table cannot know that, and a test that claimed to would be worse than none — it would make a wrong classification look verified. What it enforces is that a decision was *made*, by the one person who can still make it cheaply: whoever is adding the field. Same instrument as `TestThePlanProfileKeepsTheSharedPlanShape` (§106.11) and the release checklist — pin the coupling with a test rather than with a habit.
+
+**Verified:** `preparedCrossSession.test.ts` — five cases, and the fix was reverted to watch two of them fail before it was put back. The one that matters most is not the leak: it is that coming back lands on the option the user had already pressed Tab to reach, because restoring the first one would be the chat quietly undoing a keypress.
+
+**Owed:** nothing new. But §187's own note that a desk belongs to one conversation, the undo chip's comment, and this section are three descriptions of one rule, and the rule now has one home.
+
+## 235. Decision — A Plan Is a Document the Assistant Keeps, Not a Message It Retypes (2026-09-08)
+
+Owner: *"Aetox ตอนนี้ตอนวางแผน แม่งไม่ถามอะไรและเขียนแผนขึ้นมาใหม่ตลอด ทำให้เปลืองมาก แทนที่จะถามได้ระหว่างทางและแก้แผนเดิมได้ ไม่ใช่แก้ไขใหม่"*
+
+Two complaints, one root, and the root is older than either: **วางแผน produced a plan and then had nowhere to put it.**
+
+### 235.1 The number, before the argument
+
+`cmd/tokenaudit` gained a **PLAN REWRITES** section, counted off the transcript — a plan is not a tool call, it is the model's own words inside the fence §106.12 added, and that fence is the only mark separating a plan from an answer that happens to have headings. **The section could not have existed before the card did**: a rendering decision turned out to be a measurement decision, which nobody intended.
+
+All time, on the owner's machine: **70% of every byte of plan ever written was written over a plan that already existed** — 34,036 bytes against 14,281 of first drafts. One conversation wrote its plan four times and re-read 15,971 bytes it had already read. The sample is two conversations across the three and a half weeks since the card shipped; it is not a statistic, it is the complaint with a number on it, and it is the *before*.
+
+### 235.2 Why it never asked, which was four things at once
+
+None of them was a missing tool. `ask_user` has been in `planKeeps` since วางแผน shipped.
+
+1. **The shape gave questions somewhere to be filed.** `planShape`'s fourth heading — *What you are unsure of* — is a place to *write down* uncertainty, so a model with a slot for its questions fills the slot instead of asking.
+2. **The closing sentence forbade them.** *"End with the plan, not with a question about whether to start"* meant *do not beg to leave the stance*. It reads as a rule about questions, and it sat in the last position, which is the loudest one.
+3. **The direction demanded a plan every turn**, with no branch for "I do not know enough yet".
+4. **`clarify()` did not cover this.** It opens *"When asked to create something"* — a plan does not read as creating a thing — and it allows ONE question BEFORE starting, which is not the shape of planning.
+
+Fixed as four edits in one file: heading four became a fork (*if an answer would change the plan, it is a question, and it belongs in `ask_user` before you write*), the closing sentence was narrowed to permission and permission only, a beat was added ahead of the reading (*look enough to know what to ASK, ask, then look properly* — a question costs one round, reading down the wrong branch costs the turn), and a branch was added for a plan that already exists. `TestPlanAsksAboutTheWorkBeforeItReads` pins the ORDER, not the wording: a question invited after the plan is demanded arrives too late to change anything.
+
+### 235.3 Why it rewrote: the plan had no identity
+
+A plan was prose in one message. No id, no version, no numbered step — so *"change step 3"* had no step 3 to change, and the only revision available was the whole document, off readings taken again.
+
+**Migration v20 gives it a row**, keyed by `session_id`: one plan per conversation, which follows the stance's own framing (the turn produces THE plan; the card IS the answer) and is what lets `amend` mean something without the model carrying an id around. Sections are JSON in one column — read and written whole, never queried into — and that is what makes `amend` exact: replace by NAME, rather than parse a plan back out of the markdown it was rendered into.
+
+**Persisted, unlike the todo list next door** (`ask_user.go`), and the difference is the point rather than an inconsistency: a checklist describes a turn that is happening, a plan is meant to outlive the turn that wrote it.
+
+`plan` is three actions on one pack — `write`, `amend`, `read` — and it is **the first pack whose per-action cut is the whole point rather than a cost**: `read` only looks and belongs to every stance, `write` and `amend` change a stored plan and belong to วางแผน. `AllowsAction` — the machinery §106.9 added so the browser could keep its reading half — is what makes that possible.
+
+**`plan_read` in ลงมือ is the second thing this buys.** Switching to act used to leave the plan behind as transcript text, so the acting session read it back out of the conversation and interpreted it again. Now it asks.
+
+**The receipt is deliberately not the plan.** Handing the document back would put every byte of it into context on every write — the model would have written the plan once and paid for it twice, which is the shape of waste this exists to end. What comes back is that the write landed, what the plan holds now, which headings are still empty, and one line: the user can see it, do not repeat it.
+
+### 235.4 Two places this nearly went wrong, both caught by guards already in the repo
+
+**The stance nearly named a desktop-only tool.** The direction was written as *"put the plan in the `plan` tool"*, which is false in a CLI session — `planSkill` is registered in `workbenchSkills`. §106.12's line is what resolves it, and it holds unchanged: **the shape is policy and travels everywhere; the mechanism for getting it on screen is rendering and stays where something can draw.** `planCard(desk)` now branches on `desk.carries("plan")` — the tool where there is one, the fence where there is not — gated on the tool rather than on a build or a stance name, so the fence stays the honest answer for any surface that draws cards without one.
+
+**Every error path returned a blank receipt.** `skill.Output{Name: "plan"}` with no Content and no Stderr is a failed tool row the user sees with nothing written on it. Found by `tool_coverage_test.go`, **whose own report of the failure was blank for the same reason** — the test could not say what went wrong because the tool did not say. One `planFail` now, with a test of its own.
+
+`TestEveryToolHasACategory` and `TestEveryToolRunsThroughTheRealDispatcher` each caught a step that had not been done — a missing category, three missing coverage cases. Both worked exactly as written.
+
+### 235.5 The card, and the half the fence used to give for free
+
+The card is drawn from the row now, anchored on the plan STEP in the timeline rather than on anything the model typed. That anchor is what makes it survive a reopen: the step is stored with the turn, the plan is stored in the database, and neither is a sentence somebody has to have typed. It draws the plan as it stands NOW rather than as it stood then — deliberately, and the same reading `plan read` gives: there is one plan being worked on, not a copy per revision. `changed` marks what the last call touched, and is the only field NOT stored, because it is a fact about the call rather than about the plan.
+
+§234's classification test caught the new `cockpit.plan` field on the first run, one hour after that test was written. `plan` is *dropped and re-read* (`SessionPlan`), which is the undo chip's answer and not the prepared wording's, because the engine can always be asked again.
+
+The card's styles lost their `.markdown-body` prefix in the same change: the prefix was never about the markdown, it was there because a plan had exactly one home. Two cards for one thing that do not look alike is worse than either, so the compass and the copy button came across too. Verified in dark and in `catppuccin-latte` against the real stylesheets, where a first draft was caught making section headings DIMMER than the prose under them — an inverted hierarchy the eye has to climb back up.
+
+### 235.6 What this sets up
+
+`PlanHeadings()` has a caller again. It lost its last one when `profiles/subagents/plan.md` was deleted, taking `TestThePlanProfileKeepsTheSharedPlanShape` — the §106.11 anti-drift seam — with it, and nobody noticed because nothing failed. The tool's schema now reads the shape from there, so the prompt, the tool and the card agree by construction rather than by care.
+
+And **มุ่งเป้า, declined at §106.10 on 2026-08-14, is reopened by the owner and is no longer the same build.** Of the four parts that decision named as non-optional, three now exist: the hard ceiling is `MaxToolCalls` (`cognitive/agent.go`, where the loop is already unbounded by choice), stepwise progress is `task_plan`'s phases, and a checker that is not the model that just declared victory is the `reviewer` profile. The missing one was a finish condition that can be *checked* rather than felt — which is exactly the heading added in §235.2, *How you will know it worked*. So มุ่งเป้า is not a fourth stance: **it is วางแผน's acting leg**, aimed at a stored plan whose finish is written down. §106.10's objection — *"it tries harder for longer is a paragraph of prose"* — does not apply to a goal that comes from a document the user approved.
+
+The owner's constraint on it, given while this was being built: *"ทำให้มันรายงานให้น้อย… พูดแค่ส่วนสำคัญน้อยสุดยิ่งดี"*. He is right for a sharper reason than output tokens. Narration written alongside a round's tool calls goes into the conversation and is re-sent with every later round of the same turn, so **the cost of narrating is quadratic in the length of the run** — and มุ่งเป้า is the only mode designed for long runs, which is why nothing else has ever noticed. Progress belongs on the screen as objects (phases, step ticks), not in the conversation as sentences. That is a shrink of the prose and not of the state: §106.10 requires a checkable finish and an independent checker, and a checker needs state to check.
+
+**Owed:** ประตูส่งไม้ (COMPANY.md §8), which has waited since §86 for the artifact it needed and now has one — a door that opens a coding session with a `plan_id` on the desk. And saving a plan to a file, still owed from §106.12, which is now a render of a row rather than a scrape of a message.
+
+---
+
+## 238. Decision — Moving Machines Is a 2 MB File, and Half of aetox.db Is an Index That Rebuilds (Proposed, not built, 2026-09-08)
+
+Owner: *"เราเพิ่มฟีเจอร์แบบอัปโหลดข้อมูล Aetox ขึ้นไปฝากกับซุเปอร์เบสหรือเจ้าอื่นที่เป็นคลาวด์อ่ะครับได้ไหม … กรณีแบบจะย้ายเครื่อง เป็นทางเลือกสำหรับคน"* — then, after the first reading: *"แค่คิดไว้เฉย ๆ นะ เก็บได้แค่ประวัติ แชท และผลงาน ให้ติ๊กได้ด้วยจะเซฟไฟล์ไหนประเภทไหน และไฟล์ความจำของ Aetox ข้อมูลผู้ใช้ แค่นี้พอ · งานโค้ด ให้ Aetox แนะนำให้เก็บบนกิตฮับ … ยังไม่ได้จะทำจริง ถ้าเวิคค่อยทำ"*
+
+Recorded because the measurement is the part that will be stale by the time anyone builds this, and because it moved the answer twice before any code was designed.
+
+### 238.1 The question was "which cloud", and the first thing measured was what would have to go up
+
+`%APPDATA%\aetox` on the owner's machine is **4.4 GB**, which is the number that makes this sound like a sync product. It is not what a second machine wants. `models` (1.6 GB), `tools` (1.5 GB), `webview` (1.2 GB), `snapshots` (127 MB), `cache`, `logs` and `bin` are either re-downloadable or facts about *this* computer — a shadow git store whose work tree is a path that will not exist over there is worth less than nothing.
+
+That leaves `aetox.db` at 47 MB, and **`dbstat` says the database is mostly not the conversation**:
+
+| | |
+|---:|:--|
+| 24.7 MB | `tool_runs_fts_data` |
+| 9.7 MB | `tool_runs` |
+| **8.3 MB** | **`messages`** — 718 rows, 124 sessions |
+| 1.6 MB | `messages_fts_data` |
+| 1.1 MB | `jobs` |
+| 0.3 MB | `token_usage` |
+
+**Over half the file is a trigram index, and a trigram index is derived data.** FTS5 external-content tables rebuild from their source with one statement (`INSERT INTO messages_fts(messages_fts) VALUES('rebuild')`), so shipping them is paying transfer for something the destination can regenerate in seconds. The `tokenize='trigram'` declared in [db.go](../desktop/db.go) — taken so Thai substrings match without word boundaries, and reused by §71 for `tool_runs_fts` — is what makes the index this large relative to the text, which is a cost worth paying on disk and never worth paying on a wire.
+
+The box the owner described therefore weighs **about 8.5 MB before compression, and something near 2 MB after**. Every downstream decision in this section follows from that one number.
+
+### 238.2 ผลงาน is not in Aetox's data root, and the owner's own answer already covers it
+
+[artifacts.go:28](../desktop/artifacts.go) — `outputDir = "output"`, resolved against the **project** root, not against `config.DataRoot()`. Produced work has always lived inside the user's own folder.
+
+So *"งานโค้ด ให้ Aetox แนะนำให้เก็บบนกิตฮับ"* is not only right for code: **a project that is a git remote already moves its artifacts for free**, and has since before this was asked. What Aetox owes the user is not a backup of `output/` — it is the sentence nobody says today: *this project is not a repository, so what you made in it will not travel.* §237 taught the gallery to ask whether a directory is a checkout; the same question answers this one, pointed the other way.
+
+### 238.3 Ticking is the requirement that decides the format
+
+*"ให้ติ๊กได้ด้วยจะเซฟไฟล์ไหนประเภทไหน"* rules out the obvious implementation. A checkbox list cannot ship `aetox.db` as a file — a file is all of it or none of it — so the box has to be a **per-part export that is reassembled on arrival**, which is [export.go](../desktop/export.go) widened from one chat to the whole house: a versioned envelope that refuses a file from a newer build rather than half-reading it.
+
+The list as the owner drew it, with what each part actually is and what it weighs today:
+
+| Tick | What travels | Size | Default |
+|:--|:--|--:|:--|
+| ประวัติแชท | `sessions` + `messages` | 8.3 MB | on |
+| ความจำของ Aetox | `memory/` (`MEMORY.md`, `USER.md` — §229) + `project/<name>/context/` | 24 KB | on |
+| ข้อมูลผู้ใช้ | `identity/`, model preference, `connections.json`, `mcp-servers.json`, `hooks.json` | ~60 KB | on |
+| ทีมเอเจน | `agents/` | 18 MB | off — re-installable |
+| ประวัติการทำงาน | `tool_runs` + `jobs` | 11 MB | off |
+| กุญแจ API / โทเคน | `credentials.json`, `oauth.json` | 12 KB | **off, and only ever on by an explicit tick** (owner, 2026-09-08) |
+| โค้ด · ผลงาน | — | — | not offered; §238.2 |
+
+Not in the list, deliberately: `model-catalog.json` (3.6 MB) is a cache with a refresh path, and `shell-audit.log` is this machine's record of what was run here — the same reason [export.go](../desktop/export.go) already leaves ratings and job rows out of a chat export: a machine should not arrive holding verdicts nobody on it approved.
+
+### 238.4 Three facts that will bite whoever builds it
+
+1. **A plain copy of `aetox.db` is a corrupt copy.** The WAL was 5 MB at the time of measuring. The read has to go through a real connection, or through `VACUUM INTO`.
+2. **The keys cannot cross a machine as bytes.** [dpapi_windows.go](../internal/atrest/dpapi_windows.go) binds the ciphertext to *this* Windows account — that is the whole point of what that file is for, and it means a copied `credentials.json` is unreadable noise over there rather than a leak. If the tick is on, the values must be `Unprotect`ed, sealed under the box's own passphrase, and `Protect`ed again on arrival. Off Windows the same file is plaintext today, which is a second reason the box needs its own encryption rather than trusting what it is copying.
+3. **Rebuild both FTS tables on import, or search silently returns nothing.** The triggers only fire on new writes.
+
+### 238.5 The cloud leg turned out to be the small half, and no vendor is required
+
+At 2 MB compressed and encrypted client-side, the box is already portable by every means the user has: a USB stick, any folder they sync, or a commit into the private repository they are being told to keep their code in anyway. **The feature that was asked for as "อัปโหลดขึ้นซุปาเบส" is, at this size, a file — and a file needs no account, no key, no dependency, and no new party.**
+
+That also settles the honesty question rather than arguing with it. [README.th.md](../README.th.md) opens with *"ข้อมูลไม่ออกจากเครื่อง"*, and a build that quietly gained an upload button would have made that line false. A box the user encrypts and carries does not: nothing leaves unless they move it, and what they move is ciphertext.
+
+**Supabase Storage is deferred, not rejected** — plain REST with a bearer token, no SDK, and cheap to add *because the box exists*. It becomes worth building when someone who is not the owner asks for it; until then it is a destination for a thing that has not been built.
+
+**Status: proposed, nothing written.** The owner's condition was *"ถ้าเวิคค่อยทำ"*, and the reading says it works — the work is a per-part export/import, a passphrase envelope, and a settings pane, with no new storage format and no new dependency.
+
+## 236. Decision — มุ่งเป้า Is วางแผน's Acting Leg, and Its Checker Is Mechanical (2026-09-08)
+
+Owner, mid-build on the planning overhaul: *"เดี๋ยวเราจะเพิ่ม โหมด มุ่งสู่เป้าหมายด้วย แบบจะทำตามที่ได้รับคำสั่งจนกว่าจะเสร็จ… ทำเป็นขั้นๆไป เหมือน Codex อ่ะครับ"* — and then, on how it should behave: *"ทำให้มันรายงานให้น้อย แล้วทำอย่างรอบคอบนะครับ เพราะรายงานเยอะจะเปลืองโทเค็นมาก"*
+
+This reopens §106.10, which he declined on 2026-08-14. **It is not the build that was declined**, and every difference is a thing that got built in between.
+
+### 236.1 The four parts, and where each one is now
+
+§106.10 named four as non-optional. Three of them existed before this section started, which is most of why the answer changed:
+
+| §106.10 required | Where it is |
+|---|---|
+| A goal pinned so a long run cannot drift | The stored plan (§235) — pinned by pressing the button **on** it |
+| A finish condition that can be CHECKED, not felt | The plan's *"How you will know it worked"*, added in §235.2 for exactly this |
+| A checker that is not the model that just declared victory | Mechanical, §236.3 |
+| A hard ceiling on steps and tokens | `MaxToolCalls`, which already bounded the loop |
+
+§106.10's own objection was *"it tries harder for longer is a paragraph of prose"*. It does not apply to a goal that comes from a document the user read and approved.
+
+### 236.2 It is not a fourth stance, and it is not a new loop
+
+**Not a stance**, because the dial subtracts and this adds. §106.3's test is that a stance must change what the engine does by *filtering*; a control loop on the same control would make that control mean two different kinds of thing.
+
+**Not a loop either**, and this is the part that made it affordable. §106.10 costed the build as "a control loop in the turn executor, with a verification call every round". The loop already had the branch it needed: **a turn that was going to end is kept alive when an interjection arrives** — which has been true since the user could type into a running turn. `OnGoalCheck` is that same branch with a different author. The verdict goes in as a user turn, after the demoted answer, in exactly the order an interjection uses, because it is the same thing: somebody telling the model the work is not finished.
+
+And it is asked **once per attempt to finish**, never per round. A run that works for thirty rounds and stops is checked once. That is where the "cost that multiplies" went.
+
+### 236.3 The checker is mechanical first, and that is the whole trick
+
+The obvious build is a second model call — ask a `reviewer` whether the work is done. It is what §106.10 priced, and it has a worse problem than price: a model asked whether another model finished is still a model judging prose.
+
+**Gate one is not a judgement.** Every step of the plan is a row with a state (`plan step`), and a run is not finished while a step is unmarked. A model that says "all done" with step 3 untouched is handed step 3 back by name. The only way past it is to call `plan step` on work that did not happen — a deliberate false statement in a tool call, which is a far higher bar than a confident closing sentence.
+
+This is why steps are **structured rather than parsed out of the "What to change" prose**. To know whether step 3 is done off a markdown list you would have to read it, which is a judgement, which is the one thing the checker must not be.
+
+**Gate two is the finish condition**, which is prose and does need judgement. It fires **once per run**, handing back the plan's own words: you said this is how we would know it worked — say how you verified it. A criterion written in an earlier turn and approved by the user is not the same as a model marking its own homework in this one. Once, because a gate that can fire repeatedly on prose is a gate that argues; the ceiling is what handles a run that genuinely cannot finish, and it is the part that must not be left to judgement.
+
+**`failed` settles a step as fully as `done`.** A step reported impossible is a finding the user needs, and sending the turn back over it forever would be the run refusing to accept an answer.
+
+**`plan_step` is withheld from วางแผน**, and it is the first entry in that allow-list whose absence is about the promise rather than about tokens: marking a step done is a statement that work *happened*, and a plan whose steps were ticked while nothing ran would be the one lie this whole mode exists to make impossible.
+
+### 236.4 The UI is the plan card, and that is the answer to "report less"
+
+Owner: *"UI มุ่งเป้าจะเป็นแบบไหน"*.
+
+One button on the card — **ลงมือตามแผนนี้** — and the card becomes the run. Steps tick in place; the header counts settled against total; one Stop beside it. No new panel, no new dial, no narration.
+
+The button being ON the plan is load-bearing rather than convenient: it is what pins the goal. Nothing is re-typed, nothing is re-interpreted, and a plan with no steps has no button — which is the honest refusal, because มุ่งเป้า with nothing checkable *is* "try harder for longer".
+
+**And the no-narration rule has arithmetic behind it, not taste.** Narration written alongside a round's tool calls goes into the conversation and is re-sent with every later round of the same turn: the sentence written at step 1 of a thirty-step run is paid for thirty times. **The cost of narrating is quadratic in the length of the run**, and มุ่งเป้า is the only mode designed for long runs, which is why nothing else has ever noticed. Step rows cost nothing per round — they are a UI object reading state, not sentences in a context.
+
+That is a shrink of the prose and **not** of the state. §106.10 requires a checkable finish and a checker, and a checker needs state to check.
+
+### 236.5 What was verified, and two things a snapshot caught
+
+`goal_check_test.go` pins the seam in `internal/cognitive`: a verdict sends the turn back, the demoted answer is written down *before* it, a turn with no check makes exactly one provider call, a cancelled turn is not sent back, and — the one that matters most — **a checker that never says yes still hits `MaxToolCalls`**. That last is the test standing in for the person who walked away.
+
+`goal_run_test.go` pins the gates in `desktop`: unmarked steps are named, settled ones are not, `failed` settles, the finish condition is asked once, a plan without steps is refused, stopping the run lets the turn *end* rather than cutting it off, and an amend that does not mention the steps keeps their marks — which would otherwise lose the record of work that had already happened.
+
+Drawn against the real stylesheets in both themes before shipping, which caught two things that fail silently: section headings set **dimmer than the prose under them** (an inverted hierarchy the eye has to climb back up), and a failed step's reason set in the faintest ink the theme has — against the rule written two lines above it in the same file, that a failed step is a finding and stays readable.
+
+**Owed:** ประตูส่งไม้ still, though it is now one door from existing — the run is the acting half, and what is missing is opening it in a *coding* session rather than this one. And a third gate, if it is ever wanted: a `reviewer` delegate above the two here. It is deliberately not built, because the mechanical gate is the one that cannot be talked around and a model gate on top of it would mostly add cost.
