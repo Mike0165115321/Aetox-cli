@@ -8212,7 +8212,11 @@ Drawn against the real stylesheets in both themes before shipping, which caught 
 
 Taken: off by default; never drives itself; one session drives at a time; a stop that always works; a tier per kind of program; and the order **connector → `shell` → `browser` → `computer`**, which both products enforce twice, in the model and in the permissions, because the broadest tool is also the slowest and least precise.
 
-Not taken: **session-scoped grants.** Both expire an app approval when the session ends. [workspace.go:186](../desktop/workspace.go) already settled this for folders — *"there is deliberately no 'allow once': a right that is not on the list is a right the panel has stopped describing"* — and a session grant is an allow-once with a longer fuse: it disappears without being revoked, so the user never learns what they granted, and it re-asks for something already decided. A yes becomes a `safety.PermissionRule` in `permissions.json` and a row in Settings with a button to take it back. `config.SavePermissions` did not exist before this; every rule in that file had come from the user's own hand or from bootstrap.
+Not taken: **session-scoped grants.** Both expire an app approval when the session ends. [workspace.go:186](../desktop/workspace.go) already settled this for folders — *"there is deliberately no 'allow once': a right that is not on the list is a right the panel has stopped describing"* — and a session grant is an allow-once with a longer fuse: it disappears without being revoked, so the user never learns what they granted, and it re-asks for something already decided. A grant becomes a `safety.PermissionRule` in `permissions.json` and a row in Settings with a button to take it back. `config.SavePermissions` did not exist before this; every rule in that file had come from the user's own hand or from bootstrap.
+
+**And then the asking went too, which is the change the owner made after using it** (*"แล้วต้องเลือกด้วยดิ จะให้ตัวไหนควบคุม"*). The first version raised a card on the first touch of a program and remembered the yes. That is what both rivals do, and all three of us were asking at the worst possible moment: a card raised mid-turn asks somebody to decide in a hurry, about a program they were not thinking about, while an agent waits on the answer. Everything in that moment argues for yes — the work is half done, the question is in the way, and the cost of no is starting over. Now the programs are chosen in Settings, from the windows that are open or by browsing to an executable, with nothing waiting; a reach at anything else is refused and says which program to add. **A decision instead of a reflex.**
+
+**The switch removes the tool rather than refusing its calls** (*"แยก tool เลยนะ ถ้าไม่เปิด ก็ไม่เอาระบบนี้"*), and the two look identical from the settings page. Refusing means the model reads the block, believes it may drive the machine, plans around that, calls, and is told no — a wasted round and a plan built on a premise that was never true. Removing means the model plans with what it has. It is also ~280 tokens on every request of every session, for a capability that ships off. `prompt.Desk.DrivesMachine` is the other half: the desk manifests grant `computer` by category, so without it every CLI session and every switched-off desktop session was told to prefer other tools over one it did not have.
 
 Not taken either: **aiming by coordinate.** Codex on Windows reasons entirely from screenshots, which works because it is one model that was trained to. Aetox runs 19 providers including local ones, and most of those cannot point at a pixel. The reach aims at UI Automation elements instead, numbered `[n]` exactly as `browser_read` numbers a page — so a model that has learned one has learned the other, and a model with no eyes at all can still use it.
 
@@ -8240,8 +8244,9 @@ The takeover strip is drawn inside Aetox's own window, and the foreground model 
 
 ### Release checklist — on the installed exe
 
+0. With the switch off, the model has no `computer` tool at all — not one that refuses.
 1. `computer list_apps` sees the windows and marks which are not yet allowed.
-2. First `read` raises the approval card; a yes puts the program in Settings → การใช้คอมพิวเตอร์.
+2. A program not chosen in Settings → การใช้คอมพิวเตอร์ is refused, and the refusal names it; adding it there, from the open-window list or by browsing, makes the next call work.
 3. **Thai typed into a real field and read back exactly.** The one that decides it.
 4. `capture` returns the window with no Aetox in the picture.
 5. `click` presses a real control in a dialog.

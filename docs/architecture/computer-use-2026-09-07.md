@@ -257,7 +257,24 @@ that is amended in public. Everything in §1–§8 still stands. Implementation 
 | **`capture` added** | `browser` has one and half the models in the picker have eyes. It is a picture of ONE window, taken by asking that window to draw itself, so nothing behind it or on another monitor is in it — which is why it does not cross §6.4's line against screen recording. It is for SEEING, never for aiming: a picture has no refs, and `read` is what a click is aimed by. |
 | **`keys` folded into `type`, not made an action** | Both are typing. A user deciding "Aetox may type in this program" has not thereby drawn a line between a word and ctrl+s, so a separate permission would be a right nobody asked for and nobody would understand. |
 
-**One thing §4 did not decide, and the owner did: the screen is taken.**
+**Two things §4 did not decide, and the owner did after using it.**
+
+**The switch removes the tool, it does not refuse its calls.** §4.3's three gates
+all assume the tool is there and the gate says no. A fourth answer turned out to
+matter more: with the setting off, `computer` is not registered at all. A model
+that reads it in the block plans around a capability it will be denied, and pays
+~280 tokens a request for the privilege.
+
+**The programs are chosen in Settings, not asked for mid-turn.** §4.3's
+`Default: ask` rule made the first click into a foreign window a question. It
+worked, and it asked at the worst possible moment — a card raised while an agent
+waits is answered in a hurry, and everything about that moment argues for yes.
+The rule it becomes: the user picks programs on this page, from the windows open
+or by browsing to an executable, and a reach at anything else is refused and
+names what to add. Same `PermissionRule`, same file, same register; the deciding
+moved to where there is nothing waiting.
+
+**And the screen is taken.**
 
 An acting call raises the window it works on, holds a machine-wide lock, and
 lights the whole edge of the screen for as long as it is driving. That is the
